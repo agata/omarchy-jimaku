@@ -34,17 +34,27 @@ def append_history(text):
         stream.write(text)
 
 
-def read_preferences(path=None):
+def read_preferences(path=None, *, for_update=False):
+    path = path or SETTINGS_FILE
     try:
-        value = json.loads((path or SETTINGS_FILE).read_text())
-        return value if isinstance(value, dict) else {}
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError("Settings must be a JSON object")
+        return value
+    except FileNotFoundError:
+        # A dangling symlink is an existing configuration, not a fresh install.
+        if for_update and os.path.lexists(path):
+            raise ValueError("既存の設定ファイルを読み取れないため、保存しませんでした。ファイルと権限を確認してください。") from None
+        return {}
     except (OSError, ValueError):
+        if for_update:
+            raise ValueError("既存の設定ファイルを読み取れないため、保存しませんでした。ファイルと権限を確認してください。") from None
         return {}
 
 
 def save_preference(name, value, path=None):
     path = path or SETTINGS_FILE
-    data = read_preferences(path)
+    data = read_preferences(path, for_update=True)
     data[name] = value
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".settings-")

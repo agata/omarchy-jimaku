@@ -50,6 +50,47 @@ class SettingsTests(unittest.TestCase):
                 path.write_text(bad)
                 self.assertEqual(b.read_target(path), "auto")
 
+    def test_invalid_existing_settings_are_never_replaced(self):
+        for contents in [b"broken", b"[]", b"null", b'"text"', b"\xff"]:
+            with self.subTest(contents=contents), tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "settings.json"
+                path.write_bytes(contents)
+                for name, value in [("target_language", "ja"), ("display_mode", "readable")]:
+                    with self.assertRaises(ValueError), patch.object(b.os, "replace") as replace:
+                        b.save_preference(name, value, path)
+                    replace.assert_not_called()
+                    self.assertEqual(path.read_bytes(), contents)
+                    self.assertEqual(list(Path(folder).glob(".settings-*")), [])
+
+    def test_unreadable_settings_are_never_replaced(self):
+        for failure in [PermissionError("denied"), OSError("I/O failure")]:
+            with self.subTest(failure=type(failure)), tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "settings.json"
+                contents = b'{"custom":true}'
+                path.write_bytes(contents)
+                with patch.object(Path, "read_text", side_effect=failure), patch.object(b.os, "replace") as replace:
+                    with self.assertRaises(ValueError):
+                        b.save_preference("display_mode", "readable", path)
+                replace.assert_not_called()
+                self.assertEqual(path.read_bytes(), contents)
+
+    def test_missing_settings_can_be_created_and_unknown_keys_survive(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "new" / "settings.json"
+            b.save_preference("custom", {"nested": [1, 2]}, path)
+            b.save_target("ja", path)
+            self.assertEqual(json.loads(path.read_text()), {"custom": {"nested": [1, 2]}, "target_language": "ja"})
+
+    def test_dangling_settings_link_is_preserved(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "settings.json"
+            target = Path(folder) / "missing.json"
+            path.symlink_to(target)
+            with self.assertRaises(ValueError):
+                b.save_preference("display_mode", "readable", path)
+            self.assertTrue(path.is_symlink())
+            self.assertFalse(target.exists())
+
     def test_secret_is_private_and_not_echoed(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(b.os.environ, {}, clear=True):
             path = Path(folder) / "settings" / "key"
@@ -169,6 +210,18 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
             return [ROW]
         self.bridge = b.Bridge(lambda kind, **fields: self.events.append({"type": kind, **fields}),
                                lambda *a, **kw: self.socket, capture, source_fn)
+
+    async def test_failed_settings_update_reports_error_and_keeps_state(self):
+        await self.prepare()
+        with tempfile.TemporaryDirectory() as folder, patch.object(b, "SETTINGS_FILE", Path(folder) / "settings.json"):
+            b.SETTINGS_FILE.write_text("broken")
+            original = (self.bridge.target_preference, self.bridge.display_mode)
+            for command in [{"action": "set_target", "language": "fr"}, {"action": "set_display_mode", "mode": "readable"}]:
+                await self.bridge.command(command)
+                self.assertEqual(self.events[-1]["type"], "error")
+                self.assertEqual(self.events[-1]["operation"], command["action"])
+                self.assertEqual((self.bridge.target_preference, self.bridge.display_mode), original)
+                self.assertEqual(b.SETTINGS_FILE.read_text(), "broken")
 
     async def test_selected_language_reaches_session_and_survives_restart(self):
         await self.prepare()

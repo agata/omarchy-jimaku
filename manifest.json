@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.agata.jimaku",
   "name": "Jimaku",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "author": "agata",
   "license": "MIT",
   "description": "Live translated subtitles for app audio, in a separate resizable window.",

@@ -131,6 +131,8 @@ Omarchy removes the plugin registration/checkout or link. Local keys, preference
 
 ## Troubleshooting
 
+- **Settings were not saved:** an existing settings file could not be read or was not a JSON object. Jimaku leaves it unchanged. Check its permissions or repair the file; back it up before manually resetting it.
+
 - **Setup required:** run `setup.sh`; it checks prerequisites and installs the pinned dependency. Re-run after a system Python upgrade too.
 - **No playback source:** start playback and check the application is not paused/muted. Discovery uses stream state, not sound recognition; silent but active streams may appear.
 - **Connection failed:** check API billing, model access, connectivity and your key. Sensitive provider responses are not written to logs.
