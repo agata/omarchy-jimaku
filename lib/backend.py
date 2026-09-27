@@ -380,6 +380,9 @@ class Bridge:
                             asyncio.create_task(watch_source()), asyncio.create_task(self.stop_event.wait())]
                 done, _ = await asyncio.wait(children, return_when=asyncio.FIRST_COMPLETED)
                 failure = next((t.exception() for t in done if not t.cancelled() and t.exception()), None)
+                # Signal the producer before cancellation: older asyncio.wait_for
+                # can race with a just-completed read/send and lose cancellation.
+                self.stop_event.set()
                 for task in children:
                     task.cancel()
                 await asyncio.gather(*children, return_exceptions=True)
