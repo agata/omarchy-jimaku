@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.2
+
+- Bound audio-discovery stdout/stderr while reading, before JSON parsing; terminate and reap oversized or stalled producers.
+- Limit source lists to 256 rows and bound all UI text and identifiers.
+- Add real subprocess regression tests for output floods, concurrent pipes, timeouts, cancellation and malformed responses.
+
+
 ## 0.9.1
 
 - Refuse preference updates when existing settings cannot be read or are not a JSON object; preserve the file and current runtime preferences.

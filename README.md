@@ -131,6 +131,8 @@ Omarchy removes the plugin registration/checkout or link. Local keys, preference
 
 ## Troubleshooting
 
+- **Audio discovery exceeded its size limit:** discovery accepts up to 1 MiB of stdout, 64 KiB of stderr and 256 rows per list. Oversized output stops the producer and reports an error; app/media labels and identifiers are length-limited. Close unnecessary playback apps and retry.
+
 - **Settings were not saved:** an existing settings file could not be read or was not a JSON object. Jimaku leaves it unchanged. Check its permissions or repair the file; back it up before manually resetting it.
 
 - **Setup required:** run `setup.sh`; it checks prerequisites and installs the pinned dependency. Re-run after a system Python upgrade too.

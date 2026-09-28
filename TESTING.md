@@ -49,3 +49,5 @@ bash scripts/screenshots.sh
 0.9.0: user configuration and translation history moved to `jimaku` with byte-for-byte equality verified, runtime rebuilt at its new path, legacy plugin registration removed, and the new window rule reloaded without Hyprland errors.
 
 0.9.1: 26 Python tests pass, including fail-closed preference writes for malformed/non-object JSON, invalid UTF-8, permission/I/O failures and dangling symlinks. Command-level tests verify an error response without changing the file or in-memory preferences; successful updates preserve unknown keys.
+
+0.9.2: 37 Python tests include real subprocess output-flood, stderr pressure, timeout and cancellation cases, verifying that producers exit and oversized stdout never reaches JSON parsing. Discovery row/text/identifier caps are also covered.

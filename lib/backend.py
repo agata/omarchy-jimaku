@@ -134,40 +134,114 @@ def save_key(value, path=KEY_FILE):
             os.unlink(tmp)
 
 
+PACTL_STDOUT_LIMIT = 1024 * 1024
+PACTL_STDERR_LIMIT = 64 * 1024
+PACTL_PIPE_LIMIT = 16 * 1024
+SOURCE_ROW_LIMIT = 256
+SOURCE_NAME_LIMIT = 160
+SOURCE_MEDIA_LIMIT = 240
+DISCOVERY_LIMIT_ERROR = "音声一覧が大きすぎるため取得を停止しました。再生アプリを減らして再試行してください。"
+
+
+async def read_bounded(reader, budget):
+    chunks = bytearray()
+    while True:
+        chunk = await reader.read(min(PACTL_PIPE_LIMIT, budget - len(chunks) + 1))
+        if not chunk:
+            return bytes(chunks)
+        if len(chunks) + len(chunk) > budget:
+            raise ValueError(DISCOVERY_LIMIT_ERROR)
+        chunks.extend(chunk)
+
+
+async def discard_pipe(reader):
+    # Used only after killing the producer; drain without retaining output.
+    while await reader.read(PACTL_PIPE_LIMIT):
+        pass
+
+
 async def pactl(kind):
     proc = await asyncio.create_subprocess_exec(
         "pactl", "-f", "json", "list", kind,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        limit=PACTL_PIPE_LIMIT)
+    readers = [asyncio.create_task(read_bounded(proc.stdout, PACTL_STDOUT_LIMIT)),
+               asyncio.create_task(read_bounded(proc.stderr, PACTL_STDERR_LIMIT))]
     try:
-        out, _ = await asyncio.wait_for(proc.communicate(), 3)
-    except BaseException:
-        proc.kill()
+        async with asyncio.timeout(3):
+            out, _ = await asyncio.gather(*readers)
+            await proc.wait()
+        if proc.returncode:
+            raise ValueError("音声サーバーに接続できません。Omarchyのセッション内で開いてください。")
+        try:
+            result = json.loads(out)
+        except (ValueError, RecursionError):
+            raise ValueError("音声一覧を読み取れませんでした。") from None
+        if not isinstance(result, list):
+            raise ValueError("音声一覧を読み取れませんでした。")
+        if len(result) > SOURCE_ROW_LIMIT:
+            raise ValueError(DISCOVERY_LIMIT_ERROR)
+        return result
+    finally:
+        # Stop production before draining so even an endless writer is bounded.
+        if proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+        for task in readers:
+            task.cancel()
+        await asyncio.gather(*readers, return_exceptions=True)
+        await asyncio.gather(discard_pipe(proc.stdout), discard_pipe(proc.stderr))
         await proc.wait()
-        raise
-    if proc.returncode:
-        raise ValueError("音声サーバーに接続できません。Omarchyのセッション内で開いてください。")
-    return json.loads(out)
+
+
+def source_id(value):
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    text = str(value)
+    return text if len(text) <= 10 and text.isascii() and text.isdigit() else None
+
+
+def source_text(value, limit):
+    return value[:limit] if isinstance(value, str) else ""
 
 
 def stream_rows(inputs, sinks):
-    monitors = {str(s["index"]): s["monitor_source"] for s in sinks}
+    if not isinstance(inputs, list) or not isinstance(sinks, list):
+        raise ValueError("音声一覧を読み取れませんでした。")
+    if len(inputs) > SOURCE_ROW_LIMIT or len(sinks) > SOURCE_ROW_LIMIT:
+        raise ValueError(DISCOVERY_LIMIT_ERROR)
+    monitors = {}
+    for sink in sinks:
+        if isinstance(sink, dict):
+            index, monitor = source_id(sink.get("index")), source_id(sink.get("monitor_source"))
+            if index is not None and monitor is not None:
+                monitors[index] = monitor
     rows = []
     for stream in inputs:
-        p = stream.get("properties", {})
-        monitor = monitors.get(str(stream.get("sink")))
-        if monitor is None:
+        if not isinstance(stream, dict):
             continue
-        name = p.get("application.name", "再生アプリ")
-        media = p.get("media.name", "音声")
-        rows.append({"id": str(stream["index"]), "label": f"{name} — {media}",
-                     "monitor": str(monitor), "sink": str(stream["sink"]),
-                     "app": name,
-                     "active": not stream.get("corked", False) and not stream.get("mute", False)
-                         and (not stream.get("volume") or any(v.get("value", 0) > 0 for v in stream["volume"].values())),
-                     "fingerprint": [str(stream.get("client", "")), str(p.get("application.process.id", "")), name],
+        index, sink = source_id(stream.get("index")), source_id(stream.get("sink"))
+        monitor = monitors.get(sink)
+        if index is None or monitor is None:
+            continue
+        p = stream.get("properties", {})
+        if not isinstance(p, dict):
+            p = {}
+        name = source_text(p.get("application.name", "再生アプリ"), SOURCE_NAME_LIMIT)
+        media = source_text(p.get("media.name", "音声"), SOURCE_MEDIA_LIMIT)
+        volume = stream.get("volume")
+        has_volume = not volume or (isinstance(volume, dict) and any(
+            isinstance(v, dict) and isinstance(v.get("value"), (int, float)) and v["value"] > 0
+            for v in volume.values()))
+        rows.append({"id": index, "label": f"{name} — {media}",
+                     "monitor": monitor, "sink": sink, "app": name,
+                     "active": not stream.get("corked", False) and not stream.get("mute", False) and has_volume,
+                     "fingerprint": [source_id(stream.get("client")) or "",
+                                     source_id(p.get("application.process.id")) or "", name],
                      "browser": any(x in name.lower() for x in ("chrome", "chromium", "brave", "firefox"))})
     return sorted(rows, key=lambda row: (not row["browser"], row["label"]))
-
 
 async def sources():
     inputs, sinks = await asyncio.gather(pactl("sink-inputs"), pactl("sinks"))

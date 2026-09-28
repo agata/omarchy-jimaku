@@ -1,5 +1,7 @@
 .pragma library
 var english = {
+  "音声一覧が大きすぎるため取得を停止しました。再生アプリを減らして再試行してください。": "Audio discovery exceeded its size limit. Close some playback apps and try again.",
+  "音声一覧を読み取れませんでした。": "Could not read the audio source list.",
   "既存の設定ファイルを読み取れないため、保存しませんでした。ファイルと権限を確認してください。": "Settings were not saved because the existing file could not be read. Check the file and its permissions.",
   "10秒間再生が停止・ミュートされていたため、自動停止しました。": "Stopped automatically after playback was paused or muted for 10 seconds.",
   "初回セットアップが必要です。プラグインフォルダで bash setup.sh を実行してください。": "Setup required. Run bash setup.sh in the plugin folder, then reopen this window.",

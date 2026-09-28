@@ -157,7 +157,7 @@ Item {
     if (ready) worker.write(JSON.stringify(value) + "\n")
   }
   function diagnostics() {
-    return JSON.stringify({ uiVersion: "0.9.1", opened: opened, ready: ready, state: state,
+    return JSON.stringify({ uiVersion: "0.9.2", opened: opened, ready: ready, state: state,
       keyReady: keyReady, sources: sourceItems.length, selectedId: selectedId, canStart: canStart, error: errorText, compact: compact, toolbarShown: toolbarShown,
       captionChanges: captionChanges, queuedCues: cueQueue.length, textSize: textSize, textSizeChoice: textSizeChoice,
       targetPreference: targetPreference, targetLanguage: targetLanguage, displayMode: displayMode, uiJapanese: uiJapanese, themed: themeLoader.item !== null, background: String(bg) })

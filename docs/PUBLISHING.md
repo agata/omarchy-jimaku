@@ -1,6 +1,6 @@
 # Publishing Jimaku
 
-Prepared release: **0.9.1**. Repository: [agata/omarchy-jimaku](https://github.com/agata/omarchy-jimaku).
+Prepared release: **0.9.2**. Repository: [agata/omarchy-jimaku](https://github.com/agata/omarchy-jimaku).
 
 The [marketplace guide](https://plugins.omarchy.org/publish.html) requires a public GitHub repository, a valid root manifest, README, license and safe install/removal. Submission is reviewed; a passing local check does not imply marketplace approval.
 
@@ -13,7 +13,7 @@ The [marketplace guide](https://plugins.omarchy.org/publish.html) requires a pub
 - Check a real translation session manually: intended stream only, output language, stop, history, network interruption. Automated tests use a mock service, not live OpenAI billing.
 - Inspect the repository contents before pushing. Never include API keys, user history, `.venv`, local configuration or private screenshots.
 - Keep installation examples current and previews free of private audio or credentials.
-- Tag the verified revision `v0.9.1` and use the changelog for release notes.
+- Tag the verified revision `v0.9.2` and use the changelog for release notes.
 
 ## Listing draft
 
